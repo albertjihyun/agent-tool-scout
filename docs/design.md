@@ -88,11 +88,24 @@ GitHub Actions (매주 cron + 수동 실행)
  ├─ 2단계 analyze (Claude Code, 구독 사용량)
  │    candidates.json + profile.md + 프롬프트 → reports/draft.md
  └─ 3단계 publish (Python)
-      리포트 검증 → reports/YYYY-Www.md 커밋 → 이슈 생성(메일 알림)
-      스냅샷·소개 이력 커밋
+      리포트 검증 → 이슈 생성(메일 알림)
+      data 브랜치에 리포트 사본·스냅샷·소개 이력 커밋
 ```
 
 실행 환경은 GitHub Actions 러너다. 별도 서버를 두지 않는다. 공개 레포라 Actions 실행 시간은 무료다.
+
+### 브랜치 역할 (소유자 결정)
+
+| 브랜치 | 내용 | 누가 바꾸나 |
+|---|---|---|
+| `main` | 코드, 문서, 프롬프트, 설정 | 소유자만, PR로만 |
+| `data` | `data/`(스냅샷, 소개 이력, 후보), `reports/`(리포트 사본) | 봇만, 직접 커밋 |
+
+- 이유: 봇이 main에 매주 커밋하면 소유자의 변경 기록 사이에 봇 커밋이 1년에 52개씩 끼고, main에 "PR 필수" 규칙을 걸 수 없다. 봇 데이터를 별도 브랜치로 분리하면 main은 PR로만 바뀌고 기록도 깔끔하다.
+- `data` 브랜치는 main과 히스토리를 공유하지 않는 고아(orphan) 브랜치로 만든다. 코드는 들어 있지 않다.
+- 워크플로우는 main을 체크아웃해 코드를 실행하고, `data` 브랜치를 별도 경로(예: `./_data`)에 체크아웃해 읽고 쓴다.
+- 리포트는 이슈로 읽는다. `data` 브랜치의 `reports/`는 보관용 사본이다.
+- 보호 규칙: main은 PR 필수 + 강제 push·삭제 금지. `data`는 강제 push·삭제 금지만(봇의 일반 커밋은 허용).
 
 ## 6. 1단계: 수집 (로직)
 
@@ -153,11 +166,11 @@ GitHub Actions (매주 cron + 수동 실행)
 
 ## 8. 3단계: 발행 (로직)
 
-- `reports/draft.md`가 있고 필수 섹션이 모두 있으면 `reports/YYYY-Www.md`로 저장.
+- `reports/draft.md`가 있고 필수 섹션이 모두 있으면 `data` 브랜치의 `reports/YYYY-Www.md`로 저장.
 - 이슈 생성: 제목은 설정 파일의 형식을 따른다(소유자는 `[주간 리포트] 2026년 10월 4주차` 형식). 본문은 리포트 전문, 라벨 `weekly-report`. 작성자가 `github-actions[bot]`이어야 레포 소유자에게 메일 알림이 간다(소유자 본인 토큰으로 올리면 본인에게는 알림이 가지 않는다).
 - `data/reported.json` 갱신(섹션 1과 별첨에 실제로 실린 레포). 분석 실패 리포트의 후보 목록은 기록하지 않는다. 분석된 적 없는 레포가 영원히 제외되면 안 되기 때문이다.
 - 스냅샷과 이력은 2단계 성공 여부와 관계없이 커밋한다. 다음 주 증가량 계산이 끊기지 않게 하기 위해서다.
-- 커밋은 봇이 main에 직접 한다. main에는 강제 push·삭제 금지 규칙만 있어서 봇 커밋은 막히지 않는다. PR 필수 규칙은 걸지 않는다.
+- 커밋은 봇이 `data` 브랜치에만 한다. main에는 커밋하지 않는다(5장 브랜치 역할 참고).
 
 ## 9. 실패 처리
 
@@ -192,11 +205,16 @@ prompts/report-template.md     리포트 형식
 profile.md                     개인화 정보
 scout/                         Python 패키지 (collect, publish, 공통 GitHub 클라이언트)
 tests/
+docs/research/                 조사 기록
+```
+
+`data` 브랜치 (봇 전용):
+
+```
 data/snapshots/                주간 스타 스냅샷
 data/reported.json             소개 이력
 data/candidates.json           이번 주 후보 (매주 덮어씀)
-reports/                       주간 리포트 아카이브
-docs/research/                 조사 기록
+reports/                       주간 리포트 사본
 ```
 
 ## 12. 첫 작업으로 확인할 것
